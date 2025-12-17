@@ -14,6 +14,10 @@ import javafx.animation.*;
 import javafx.util.Duration;
 import java.io.File;
 import java.time.LocalTime;
+import java.util.Optional;
+import java.util.List;
+import java.sql.SQLException;
+
 
 
 
@@ -79,6 +83,10 @@ public class EduClockApp extends Application {
         alert.showAndWait();
     }
 
+
+
+    private String currentRole = "GAST"; // wordt automatisch aangepast bij login
+
     // ==================== LOGIN SCREEN ====================
     private void showLoginScreen() {
         VBox root = new VBox(20);
@@ -119,14 +127,14 @@ public class EduClockApp extends Application {
                 return;
             }
 
-            gebruikerDAO dao = new gebruikerDAO();
-            boolean ok = dao.checkLogin(username, password);
+            StudentDAO dao = new StudentDAO();
+            String resultMessage = dao.checkLogin(username, password); // DAO geeft bericht terug
 
-            if (ok) {
+            if (resultMessage.contains("✅")) {
                 currentUser = username;
                 showMainApp();
             } else {
-                showStyledAlert(Alert.AlertType.ERROR, "Inloggen mislukt", "❌ Onjuiste gebruikersnaam of wachtwoord.");
+                showStyledAlert(Alert.AlertType.ERROR, "Inloggen mislukt", resultMessage);
             }
         });
 
@@ -135,15 +143,17 @@ public class EduClockApp extends Application {
         registerLink.setTextFill(Color.web("#667eea"));
         registerLink.setOnAction(ev -> showRegisterScreen());
 
-        loginCard.getChildren().addAll(title, subtitle, usernameField, passwordField, loginBtn, registerLink);
+        Hyperlink teacherLoginLink = new Hyperlink("Login als docent");
+        teacherLoginLink.setFont(Font.font("Arial", 12));
+        teacherLoginLink.setTextFill(Color.web("#667eea"));
+        teacherLoginLink.setOnAction(ev -> showTeacherLoginScreen());
+
+        loginCard.getChildren().addAll(title, subtitle, usernameField, passwordField, loginBtn, registerLink, teacherLoginLink);
         root.getChildren().add(loginCard);
 
         Scene scene = new Scene(root, 1200, 750);
         primaryStage.setScene(scene);
-
-        // Zorg dat placeholder zichtbaar blijft (geen auto-focus)
         root.requestFocus();
-
         primaryStage.show();
     }
 
@@ -187,8 +197,8 @@ public class EduClockApp extends Application {
                 return;
             }
 
-            gebruikerDAO dao = new gebruikerDAO();
-            if (dao.addGebruiker(username, password)) {
+            StudentDAO dao = new StudentDAO();
+            if (dao.addStudent(username, password)) {
                 showStyledAlert(Alert.AlertType.INFORMATION, "Succes", "✅ Account aangemaakt! Je kunt nu inloggen.");
                 showLoginScreen();
             } else {
@@ -204,31 +214,166 @@ public class EduClockApp extends Application {
 
         Scene scene = new Scene(root, 1200, 750);
         primaryStage.setScene(scene);
-
-        // Zorg dat placeholder zichtbaar blijft (geen auto-focus)
         root.requestFocus();
-
         primaryStage.show();
     }
 
 
 
-    // ==================== MAIN APP ====================
-    private void showMainApp() {
-        mainLayout = new BorderPane();
-        sidebar = createSidebar();
-        mainLayout.setLeft(sidebar);
-        showHomeView();
-        applyTheme();
-        Scene scene = new Scene(mainLayout, 1200, 750);
-        primaryStage.setScene(scene);
-    }
+    // ==================== DOCENT LOGIN SCREEN ====================
+        private void showTeacherLoginScreen() {
+            VBox root = new VBox(20);
+            root.setAlignment(Pos.CENTER);
+            root.setStyle("-fx-background-color: linear-gradient(to bottom right, #2193b0, #6dd5ed);");
+            root.setPadding(new Insets(40));
+
+            VBox loginCard = new VBox(25);
+            loginCard.setAlignment(Pos.CENTER);
+            loginCard.setMaxWidth(420);
+            loginCard.setStyle("-fx-background-color: white; -fx-background-radius: 15; -fx-padding: 50 40;");
+            loginCard.setEffect(new DropShadow(20, Color.rgb(0, 0, 0, 0.3)));
+
+            Label title = new Label("Docent Login");
+            title.setFont(Font.font("Arial", FontWeight.BOLD, 36));
+            title.setTextFill(Color.web("#2193b0"));
+
+            TextField usernameField = new TextField();
+            usernameField.setPromptText("Docent gebruikersnaam");
+
+            PasswordField passwordField = new PasswordField();
+            passwordField.setPromptText("Wachtwoord");
+
+            Button loginBtn = new Button("Inloggen als docent");
+            loginBtn.setMaxWidth(Double.MAX_VALUE);
+            loginBtn.setStyle("-fx-background-color: #2193b0; -fx-text-fill: white; -fx-font-size: 15; -fx-font-weight: bold; -fx-padding: 12; -fx-background-radius: 8;");
+
+            loginBtn.setOnAction(e -> {
+                String username = usernameField.getText().trim();
+                String password = passwordField.getText().trim();
+
+                if (username.isEmpty() || password.isEmpty()) {
+                    showStyledAlert(Alert.AlertType.WARNING, "Inloggen mislukt", "Voer gebruikersnaam én wachtwoord in!");
+                    return;
+                }
+
+                DocentDAO dao = new DocentDAO();
+                String resultMessage = dao.checkLogin(username, password);
+
+                if (resultMessage.contains("✅")) {
+                    currentUser = username;
+                    currentRole = "DOCENT"; // rol instellen
+                    showMainApp();
+                } else {
+                    showStyledAlert(Alert.AlertType.ERROR, "Inloggen mislukt", resultMessage);
+                }
+            });
+
+            Hyperlink registerLink = new Hyperlink("Nog geen docent account? Registreer hier");
+            registerLink.setFont(Font.font("Arial", 12));
+            registerLink.setTextFill(Color.web("#2193b0"));
+            registerLink.setOnAction(ev -> showTeacherRegisterScreen());
+
+            Hyperlink backToStudentLogin = new Hyperlink("Terug naar student login");
+            backToStudentLogin.setFont(Font.font("Arial", 12));
+            backToStudentLogin.setTextFill(Color.web("#2193b0"));
+            backToStudentLogin.setOnAction(ev -> showLoginScreen());
+
+            loginCard.getChildren().addAll(title, usernameField, passwordField, loginBtn, registerLink, backToStudentLogin);
+            root.getChildren().add(loginCard);
+
+            Scene scene = new Scene(root, 1200, 750);
+            primaryStage.setScene(scene);
+            root.requestFocus();
+            primaryStage.show();
+        }
+
+        // ==================== DOCENT REGISTER SCREEN ====================
+        private void showTeacherRegisterScreen() {
+            VBox root = new VBox(20);
+            root.setAlignment(Pos.CENTER);
+            root.setStyle("-fx-background-color: linear-gradient(to bottom right, #6dd5ed, #2193b0);");
+            root.setPadding(new Insets(40));
+
+            VBox registerCard = new VBox(25);
+            registerCard.setAlignment(Pos.CENTER);
+            registerCard.setMaxWidth(420);
+            registerCard.setStyle("-fx-background-color: white; -fx-background-radius: 15; -fx-padding: 50 40;");
+            registerCard.setEffect(new DropShadow(20, Color.rgb(0, 0, 0, 0.3)));
+
+            Label title = new Label("Docent Registratie");
+            title.setFont(Font.font("Arial", FontWeight.BOLD, 36));
+            title.setTextFill(Color.web("#2193b0"));
+
+            Label subtitle = new Label("Maak een nieuw docent account aan");
+            subtitle.setFont(Font.font("Arial", FontWeight.NORMAL, 16));
+            subtitle.setTextFill(Color.GRAY);
+
+            TextField usernameField = new TextField();
+            usernameField.setPromptText("Docent gebruikersnaam");
+
+            PasswordField passwordField = new PasswordField();
+            passwordField.setPromptText("Wachtwoord");
+
+            Button registerBtn = new Button("Docent account aanmaken");
+            registerBtn.setMaxWidth(Double.MAX_VALUE);
+            registerBtn.setStyle("-fx-background-color: #2193b0; -fx-text-fill: white; -fx-font-size: 15; -fx-font-weight: bold; -fx-padding: 12; -fx-background-radius: 8;");
+
+            registerBtn.setOnAction(e -> {
+                String username = usernameField.getText().trim();
+                String password = passwordField.getText().trim();
+
+                if (username.isEmpty() || password.isEmpty()) {
+                    showStyledAlert(Alert.AlertType.WARNING, "Registreren mislukt", "Beide velden zijn verplicht!");
+                    return;
+                }
+
+                DocentDAO dao = new DocentDAO();
+                if (dao.addDocent(username, password)) {
+                    showStyledAlert(Alert.AlertType.INFORMATION, "Succes", "✅ Docent account aangemaakt! Je kunt nu inloggen.");
+                    showTeacherLoginScreen();
+                } else {
+                    showStyledAlert(Alert.AlertType.WARNING, "Registreren mislukt", "❌ Deze gebruikersnaam bestaat al. Kies een andere!");
+                }
+            });
+
+            Hyperlink backToLogin = new Hyperlink("Terug naar docent login");
+            backToLogin.setOnAction(ev -> showTeacherLoginScreen());
+
+            registerCard.getChildren().addAll(title, subtitle, usernameField, passwordField, registerBtn, backToLogin);
+            root.getChildren().add(registerCard);
+
+            Scene scene = new Scene(root, 1200, 750);
+            primaryStage.setScene(scene);
+            root.requestFocus();
+            primaryStage.show();
+        }
+
+
+
+            // ==================== MAIN APP ====================
+
+            private void showMainApp() {
+                mainLayout = new BorderPane();
+                VBox sidebar = createSidebar();
+                sidebar.setStyle("-fx-background-color: #2c2f4a;"); // vaste donkere kleur
+                mainLayout.setLeft(sidebar);
+                showHomeView(); // start met Home in het midden
+
+                Scene scene = new Scene(mainLayout, 1200, 750);
+                primaryStage.setScene(scene);
+                primaryStage.show();
+            }
+
+
+
+
 
     // ==================== SIDEBAR ====================
     private VBox createSidebar() {
         VBox sidebar = new VBox(15);
         sidebar.setPrefWidth(220);
         sidebar.setPadding(new Insets(30, 15, 30, 15));
+        sidebar.setStyle("-fx-background-color: #2c2f4a;"); // vaste donkere kleur
 
         Label userLabel = new Label("Gebruiker: " + currentUser);
         userLabel.setTextFill(Color.WHITE);
@@ -237,14 +382,46 @@ public class EduClockApp extends Application {
         Region spacer = new Region();
         spacer.setPrefHeight(20);
 
-        sidebar.getChildren().addAll(userLabel, spacer,
-                createMenuButton("🏠 Home", () -> showHomeView()),
-                createMenuButton("📅 Agenda", () -> showAgendaView()),
-                createMenuButton("📝 Opdrachten", () -> showUploadView()),
-                createMenuButton("👥 Leerling-Data", () -> showBeoordelingView()),
-                createMenuButton("⚙️ Instellingen", () -> showSettings()),
-                createMenuButton("🚪 Uitloggen", () -> showLoginScreen())
-        );
+        if ("STUDENT".equalsIgnoreCase(currentRole)) {
+            sidebar.getChildren().addAll(
+                    userLabel, spacer,
+                    createMenuButton("🏠 Home", () -> showHomeView()),
+                    createMenuButton("📅 Agenda", () -> showAgendaView()),
+                    createMenuButton("📝 Opdrachten", () -> showUploadView()),
+                    createMenuButton("⚙️ Instellingen", () -> showSettings()),
+                    createMenuButton("🚪 Uitloggen", () -> {
+                        currentUser = "Gast";
+                        currentRole = "GAST";
+                        showLoginScreen();
+                    })
+            );
+        } else if ("DOCENT".equalsIgnoreCase(currentRole)) {
+            sidebar.getChildren().addAll(
+                    userLabel, spacer,
+                    createMenuButton("🏠 Home", () -> showHomeView()),
+                    createMenuButton("👥 Leerling-Data", () -> showBeoordelingView()),
+                    createMenuButton("⚙️ Instellingen", () -> showSettings()),
+                    createMenuButton("🚪 Uitloggen", () -> {
+                        currentUser = "Gast";
+                        currentRole = "GAST";
+                        showLoginScreen();
+                    })
+            );
+        } else {
+            sidebar.getChildren().addAll(
+                    userLabel, spacer,
+                    createMenuButton("🏠 Home", () -> showHomeView()),
+                    createMenuButton("📅 Agenda", () -> showAgendaView()),
+                    createMenuButton("📝 Opdrachten", () -> showUploadView()),
+                    createMenuButton("👥 Leerling-Data", () -> showBeoordelingView()),
+                    createMenuButton("⚙️ Instellingen", () -> showSettings()),
+                    createMenuButton("🚪 Uitloggen", () -> {
+                        currentUser = "Gast";
+                        currentRole = "GAST";
+                        showLoginScreen();
+                    })
+            );
+        }
 
         return sidebar;
     }
@@ -253,13 +430,21 @@ public class EduClockApp extends Application {
         Button btn = new Button(text);
         btn.setMaxWidth(Double.MAX_VALUE);
         btn.setAlignment(Pos.CENTER_LEFT);
-        btn.setStyle("-fx-background-color: #46465a; -fx-text-fill: white; -fx-font-size: 14; -fx-padding: 12 20; -fx-background-radius: 5; -fx-cursor: hand;");
-        btn.setOnMouseEntered(e -> btn.setStyle("-fx-background-color: #5555aa; -fx-text-fill: white; -fx-font-size: 14; -fx-padding: 12 20; -fx-background-radius: 5; -fx-cursor: hand;"));
-        btn.setOnMouseExited(e -> btn.setStyle("-fx-background-color: #46465a; -fx-text-fill: white; -fx-font-size: 14; -fx-padding: 12 20; -fx-background-radius: 5; -fx-cursor: hand;"));
+        btn.setStyle("-fx-background-color: #46465a; -fx-text-fill: white; -fx-font-size: 14; "
+                + "-fx-padding: 12 20; -fx-background-radius: 5; -fx-cursor: hand;");
+
+        btn.setOnMouseEntered(e -> btn.setStyle(
+                "-fx-background-color: #5555aa; -fx-text-fill: white; -fx-font-size: 14; "
+                        + "-fx-padding: 12 20; -fx-background-radius: 5; -fx-cursor: hand;"
+        ));
+        btn.setOnMouseExited(e -> btn.setStyle(
+                "-fx-background-color: #46465a; -fx-text-fill: white; -fx-font-size: 14; "
+                        + "-fx-padding: 12 20; -fx-background-radius: 5; -fx-cursor: hand;"
+        ));
+
         btn.setOnAction(e -> action.run());
         return btn;
     }
-
     // ==================== ENHANCED HOME VIEW ====================
     private void showHomeView() {
         BorderPane home = new BorderPane();
@@ -546,81 +731,102 @@ public class EduClockApp extends Application {
         return card;
     }
 
-    // ==================== 2. AGENDA VIEW ====================
+    // ==================== AGENDA VIEW ====================
+    private int huidigeWeek = 1;
+    private int currentUserId = -1; // wordt gezet bij login
+
     private void showAgendaView() {
-        BorderPane agendaLayout = new BorderPane();
+        VBox agendaWrapper = new VBox(20);
+        agendaWrapper.setPadding(new Insets(20));
+        agendaWrapper.setStyle("-fx-background-color: #f4f4f4;");
 
-        HBox header = new HBox();
-        header.setPadding(new Insets(20));
-        header.setStyle("-fx-background-color: #46465a;");
-        Label title = new Label("Agenda");
-        title.setFont(Font.font("Arial", FontWeight.BOLD, 36));
-        title.setTextFill(Color.WHITE);
-        header.getChildren().add(title);
-        agendaLayout.setTop(header);
+        HBox weekSelector = new HBox(10);
+        weekSelector.setAlignment(Pos.CENTER_LEFT);
 
-        HBox weekBar = new HBox(10);
-        weekBar.setPadding(new Insets(15));
-        weekBar.setAlignment(Pos.CENTER_LEFT);
-        Label weekLabel = new Label("Selecteer week:");
-        ComboBox<String> weekCombo = new ComboBox<>();
-        weekCombo.getItems().addAll("Week 1", "Week 2", "Week 3", "Week 4");
-        weekCombo.setValue("Week 1");
-        weekBar.getChildren().addAll(weekLabel, weekCombo);
-        agendaLayout.setBottom(weekBar);
+        Label weekLabel = new Label("Week:");
+        weekLabel.setFont(Font.font("Arial", FontWeight.BOLD, 14));
 
-        GridPane grid = new GridPane();
-        grid.setPadding(new Insets(20));
-        grid.setHgap(5);
-        grid.setVgap(5);
-
-        String[] days = {"Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"};
-
-        grid.add(new Label(""), 0, 0);
-        for (int i = 0; i < days.length; i++) {
-            Label dayLabel = new Label(days[i]);
-            dayLabel.setFont(Font.font("Arial", FontWeight.BOLD, 12));
-            dayLabel.setStyle("-fx-background-color: #64647a; -fx-text-fill: white; -fx-padding: 8; -fx-alignment: center;");
-            dayLabel.setMaxWidth(Double.MAX_VALUE);
-            grid.add(dayLabel, i + 1, 0);
+        ComboBox<Integer> weekDropdown = new ComboBox<>();
+        for (int i = 1; i <= 52; i++) {
+            weekDropdown.getItems().add(i);
         }
+        weekDropdown.setValue(huidigeWeek);
 
-        for (int row = 1; row <= 7; row++) {
-            for (int col = 0; col <= days.length; col++) {
-                Label cell = createAgendaCell();
-                grid.add(cell, col, row);
-                GridPane.setHgrow(cell, Priority.ALWAYS);
-            }
-        }
-
-        ScrollPane scroll = new ScrollPane(grid);
-        scroll.setFitToWidth(true);
-        agendaLayout.setCenter(scroll);
-
-        mainLayout.setCenter(agendaLayout);
-        applyTheme();
-    }
-
-    private Label createAgendaCell() {
-        Label cell = new Label("");
-        cell.setPrefSize(120, 60);
-        cell.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-        cell.setStyle("-fx-background-color: white; -fx-border-color: #cccccc; -fx-alignment: center; -fx-cursor: hand;");
-        cell.setWrapText(true);
-
-        cell.setOnMouseClicked(e -> {
-            TextInputDialog dialog = new TextInputDialog();
-            dialog.setTitle("Nieuwe invoer");
-            dialog.setHeaderText("Voer hier iets in:");
-            dialog.showAndWait().ifPresent(text -> {
-                cell.setText(text);
-                cell.setStyle("-fx-background-color: #b4ffb4; -fx-border-color: #cccccc; -fx-alignment: center; -fx-cursor: hand;");
-            });
+        weekDropdown.setOnAction(e -> {
+            huidigeWeek = weekDropdown.getValue();
+            showAgendaView(); // herlaad agenda voor gekozen week
         });
 
-        return cell;
-    }
+        weekSelector.getChildren().addAll(weekLabel, weekDropdown);
 
+        GridPane agendaGrid = new GridPane();
+        agendaGrid.setHgap(10);
+        agendaGrid.setVgap(10);
+        agendaGrid.setPadding(new Insets(10));
+
+        String[] dagen = {"Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"};
+
+        try {
+            AgendaDAO dao = new AgendaDAO();
+
+            for (int col = 0; col < dagen.length; col++) {
+                String dag = dagen[col];
+                Label dagLabel = new Label(dag);
+                dagLabel.setFont(Font.font("Arial", FontWeight.BOLD, 16));
+                dagLabel.setTextFill(Color.web("#333"));
+                agendaGrid.add(dagLabel, col, 0);
+
+                List<String> opgeslagenItems = dao.getAgendaItems(currentUserId, huidigeWeek, dag);
+
+                for (int row = 1; row <= 6; row++) {
+                    StackPane vak = new StackPane();
+                    vak.setPrefSize(140, 60);
+                    vak.setStyle("-fx-background-color: white; -fx-border-color: #ccc; -fx-border-radius: 5;");
+
+                    String tekst = (row <= opgeslagenItems.size()) ? opgeslagenItems.get(row - 1) : "";
+                    Label inhoud = new Label(tekst);
+                    inhoud.setWrapText(true);
+                    inhoud.setFont(Font.font("Arial", 13));
+                    inhoud.setTextFill(Color.web("#333"));
+
+                    vak.getChildren().add(inhoud);
+
+                    vak.setOnMouseClicked(ev -> {
+                        TextInputDialog tijdDialog = new TextInputDialog();
+                        tijdDialog.setTitle("Tijd invoeren");
+                        tijdDialog.setHeaderText(null);
+                        tijdDialog.setContentText("Vul de tijd in:");
+
+                        Optional<String> tijdResult = tijdDialog.showAndWait();
+                        tijdResult.ifPresent(tijd -> {
+                            TextInputDialog activiteitDialog = new TextInputDialog();
+                            activiteitDialog.setTitle("Activiteit invoeren");
+                            activiteitDialog.setHeaderText(null);
+                            activiteitDialog.setContentText("Wat wil je dan gaan doen?");
+
+                            Optional<String> activiteitResult = activiteitDialog.showAndWait();
+                            activiteitResult.ifPresent(activiteit -> {
+                                String nieuweTekst = tijd + " - " + activiteit;
+                                inhoud.setText(nieuweTekst);
+                                try {
+                                    dao.saveAgendaItem(currentUserId, huidigeWeek, dag, tijd, activiteit);
+                                } catch (SQLException ex) {
+                                    ex.printStackTrace();
+                                }
+                            });
+                        });
+                    });
+
+                    agendaGrid.add(vak, col, row);
+                }
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+
+        agendaWrapper.getChildren().addAll(weekSelector, agendaGrid);
+        mainLayout.setCenter(agendaWrapper);
+    }
     // ==================== 3. UPLOAD VIEW ====================
     private void showUploadView() {
         BorderPane uploadLayout = new BorderPane();
